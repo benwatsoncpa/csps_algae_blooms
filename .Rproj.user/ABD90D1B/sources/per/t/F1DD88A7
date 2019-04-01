@@ -1,0 +1,24 @@
+{
+    "collab_server" : "",
+    "contents" : "",
+    "created" : 1553716037004.000,
+    "dirty" : false,
+    "encoding" : "UTF-8",
+    "folds" : "",
+    "hash" : "3464481287",
+    "id" : "F1DD88A7",
+    "lastKnownWriteTime" : 1554123874,
+    "last_content_update" : 1554123874339,
+    "path" : "P:/R_Projects/Algae Blooms/algae_blooms.Rmd",
+    "project_path" : "algae_blooms.Rmd",
+    "properties" : {
+        "cursorPosition" : "417,0",
+        "last_setup_crc32" : "BF730DD76eda4b1b",
+        "scrollLine" : "399",
+        "tempName" : "Untitled1"
+    },
+    "relative_order" : 1,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_markdown"
+}

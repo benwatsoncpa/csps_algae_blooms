@@ -1,0 +1,4 @@
+"0","df.data2[,a1a2:=as.factor(ifelse((a1>15|a2>15),""ok"",""toxic""))]
+"
+"2","Error: object 'df.data2' not found
+"

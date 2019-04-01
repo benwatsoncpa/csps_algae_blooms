@@ -1,0 +1,61 @@
+"0","# Try out different values for the cost parameter -----------------------------
+results <- data.table(iter=numeric(20),
+                      mcc=numeric(20))
+for (i in 1:20){
+  model.svm = svm(a1a2 ~.-mnO2.missing,data=train,kernel=""linear"",type=""C"",cost=i,scale=F)
+  mcc.svm <- mcc(test$a1a2==""ok"",predict(model.svm,newdata=test,type=""class"")==""ok"")
+  results$iter[i] <- i
+  results$mcc[i] <- mcc.svm
+}
+"
+"2","
+WARNING: reaching max number of iterations
+"
+"2","
+WARNING: reaching max number of iterations
+"
+"2","
+WARNING: reaching max number of iterations
+"
+"2","
+WARNING: reaching max number of iterations
+"
+"2","
+WARNING: reaching max number of iterations
+"
+"2","
+WARNING: reaching max number of iterations
+"
+"2","
+WARNING: reaching max number of iterations
+"
+"2","
+WARNING: reaching max number of iterations
+"
+"2","
+WARNING: reaching max number of iterations
+"
+"2","
+WARNING: reaching max number of iterations
+"
+"2","
+WARNING: reaching max number of iterations
+"
+"2","
+WARNING: reaching max number of iterations
+"
+"2","
+WARNING: reaching max number of iterations
+"
+"2","
+WARNING: reaching max number of iterations
+"
+"2","
+WARNING: reaching max number of iterations
+"
+"2","
+WARNING: reaching max number of iterations
+"
+"2","
+WARNING: reaching max number of iterations
+"

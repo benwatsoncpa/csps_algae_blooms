@@ -1,0 +1,7 @@
+"0","cor.data <- df %>%"
+"0","  select(-season,-size,-speed) %>%"
+"0","  cor(use=""pairwise.complete.obs"") %>%"
+"0","  as.matrix() %>%"
+"0","  data.table()"
+"0","diag(cor.data) <- NA"
+"0","ggcorrplot(cor.data)"

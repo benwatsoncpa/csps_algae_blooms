@@ -1,0 +1,449 @@
+---
+title: "Algae Blooms - Team Plaid"
+author: "Ben Watson"
+date: "March 27, 2019"
+output: 
+  html_document:
+    toc: true
+---
+
+```{r setup, include=FALSE}
+
+# Built under R version 3.5.3
+
+rm(list=ls())
+
+library(data.table)
+library(tidyverse)
+library(ggcorrplot)
+library(mice)
+library(caret)
+library(C50)
+library(naivebayes)
+library(glmnet)
+library(e1071)
+
+df <- fread("algae_blooms.csv")
+
+source("./functions/multiplot.R")
+
+```
+
+## Load the data
+
+```{r}
+
+df <- fread("algae_blooms.csv")
+
+```
+
+### Data Dictionary
+
+* **season**: "winter" "spring" "autumn" "spring"
+* **size**  : "small","medium","large"
+* **speed** : Water speed
+* **mxPH**  : num Maximum PH
+* **mnO2**  : num Manganese dioxide
+* **Cl**    : num Chlorine
+* **NO3**   : num Nitrate
+* **NH4**   : num Ammonium
+* **PO4**  : num Reactive Phosphorus
+* **Chla**  : num Chlorophyl
+* **a1**    : num Algae type 1
+* **a2**    : num Algae type 2
+* **a3**    : num Algae type 3
+* **a4**    : num Algae type 4
+* **a5**    : num Algae type 5
+* **a6**    : num Algae type 6
+* **a7**    : num Algae type 7
+
+
+
+## Preprocess the data
+
+### One hot encode the categorical variables
+
+```{r}
+
+# One hot encoding will be done in a way to preserve the original categorical variables
+
+season <- df$season
+size <- df$size
+speed <- df$speed
+
+df <- df %>%
+  mutate(value=1) %>%
+  spread(season,value,fill=0) %>%
+  mutate(season=season) %>%
+  mutate(value=1) %>%
+  spread(size,value,fill=0) %>%
+  mutate(size=size) %>%
+  mutate(value=1) %>%
+  spread(speed,value,fill=0) %>%
+  mutate(speed=speed) %>%
+  data.table()
+
+  setcolorder(df,c("season","size","speed"))
+
+  rm(season,size,speed)
+
+```
+
+## Summarise/Visualize the data
+
+### Density Plot of the Numeric Variables
+
+```{r}
+
+df.melt <- df %>%
+  select(-season,-size,-speed) %>%
+  melt() %>%
+  na.omit() %>%
+  data.table()
+
+ggplot(df.melt,aes(value))+
+  geom_density(fill="red",alpha=.3,col="blue")+
+  facet_wrap(~variable,scales="free")
+
+  rm(df.melt)
+
+```
+
+### Bar graphs of the categorical variables
+
+```{r}
+
+g1 <- ggplot(df,aes(season))+
+  geom_bar(stat="count",fill="blue",alpha=.3,col="red")
+
+g2 <- ggplot(df,aes(size))+
+  geom_bar(stat="count",fill="blue",alpha=.3,col="red")
+
+g3 <- ggplot(df,aes(speed))+
+  geom_bar(stat="count",fill="blue",alpha=.3,col="red")
+
+multiplot(g1,g2,g3,cols=3)
+
+rm(multiplot,g1,g2,g3)
+
+```
+
+### Correlation Heat Map
+
+```{r}
+
+cor.data <- df %>%
+  select(-season,-size,-speed) %>%
+  cor(use="pairwise.complete.obs") %>%
+  as.matrix() %>%
+  data.table()
+
+diag(cor.data) <- NA
+
+ggcorrplot(cor.data)
+
+rm(cor.data)
+
+```
+
+### Missing Data
+
+#### Plot pattern of missing data
+
+```{r}
+
+md.pattern(df,rotate.names=T)
+
+```
+
+#### Create variables to indicate whether an observation was missing
+
+```{r}
+
+missing.data <- data.table(Chla.missing=is.na(df$Chla),
+                           Cl.missing=is.na(df$Cl),
+                           PO4.missing=is.na(df$PO4),
+                           mxPH.missing=is.na(df$mxPH),
+                           mnO2.missing=is.na(df$mnO2),
+                           NO3.missing=is.na(df$NO3),
+                           NH4.missing=is.na(df$NH4),
+                           oPO4.missing=is.na(df$oPO4))
+
+```
+
+#### Use random forest to impute the missing variables
+
+```{r}
+
+df.complete <- df %>%
+  select(-season,-size,-speed) %>%
+  mice(method = "rf", m = 1, maxit = 1) %>%
+  complete() %>%
+  cbind(missing.data) %>%
+  mutate_if(is.logical,as.numeric) %>%
+  data.table()
+  
+
+rm(missing.data)
+
+```
+
+### Cluster the data (without the y variables a1 and a2)
+
+#### Prepare the cluster dataset
+
+```{r}
+
+# Remove a1 and a2 to prevent leakage
+
+df.cluster <- df.complete %>%
+  select(-a1,-a2) %>%
+  scale(center=T,scale=T) %>%
+  data.table()
+  
+```
+
+#### Kmeans
+
+```{r}
+
+set.seed(123)
+wss <- (nrow(df.cluster)-1)*sum(apply(df.cluster,2,var))
+for (i in 2:15) wss[i] <- sum(kmeans(df.cluster,centers=i)$withinss)
+plot(1:15, wss, type="b", xlab="Number of Clusters",  ylab="Within groups sum of squares")
+
+# Conclusion: We'll go with a 7 cluster kmeans
+
+fit <- kmeans(df.cluster, 7)
+
+df.data <- data.table(df.complete,kmeans=fit$cluster) %>%
+  mutate(value=1) %>%
+  mutate(kmeans=paste("kmeans",kmeans,sep='')) %>%
+  spread(kmeans,value,fill=0) %>%
+  data.table()
+
+rm(i,wss,fit)
+
+```
+
+## Create the y variable that we will be trying to predict
+
+If the **concentations of a1 OR a2 are higher than 15**, let it signify that the algae
+levels in the river are toxic. This will be the variable that we are trying to predict. 
+
+```{r}
+
+
+df.data[,a1a2:=as.factor(ifelse((a1>15|a2>15),"ok","toxic"))]
+
+df.data2 <- df.data %>%
+	select(-a1,-a2) %>%
+  data.table()
+	
+```
+
+## Creating a train, test and validation dataset
+
+```{r}
+set.seed(123)
+train_ind <- sample(seq_len(nrow(df.data2)), size = floor(0.8 * nrow(df.data2)))
+valid <- df.data2[-train_ind,]
+train <- df.data2[train_ind,]
+
+set.seed(123)
+test_ind <- sample(seq_len(nrow(train)), size = floor(0.2 * nrow(train)))
+test <- train[test_ind]
+train <- train[-test_ind,]
+
+rm(train_ind,test_ind)
+
+```
+
+
+## Train Predictive Models
+
+### Create functions to assess the accuracy of the models
+
+```{r}
+# Function to calculate Matthews correlation coefficient
+
+mcc <- function (act, pred){
+  TP <- sum(act == 1 & pred == 1)
+  TN <- sum(act == 0 & pred == 0)
+  FP <- sum(act == 0 & pred == 1)
+  FN <- sum(act == 1 & pred == 0)
+  denom <- as.double(TP+FP)*(TP+FN)*(TN+FP)*(TN+FN)
+  if (any((TP+FP) == 0, (TP+FN) == 0, (TN+FP) == 0, (TN+FN) == 0)) denom <- 1
+  mcc <- ((TP*TN)-(FP*FN)) / sqrt(denom)
+  return(mcc)
+}
+  
+```
+
+
+
+### Decision Tree (C5)
+
+```{r}
+# Train the model -------------------------------------------------------------
+model.c5 <- C5.0(x = as.matrix(select(train,-a1a2)), y = train$a1a2)
+
+# Calculate Matthews correlation coefficient ----------------------------------
+mcc.c5 <- mcc(test$a1a2=="ok",predict(model.c5,newdata=test,type="class")=="ok")
+
+# Test different thresholds to improve the MMC metric -------------------------
+results <- data.table(threshold=numeric(100),mmc=numeric(100))
+for (i in 1:100){
+  results$threshold[i] <- i /100
+  predictions <- predict(model.c5,newdata=test,type="prob")[,1]>(i /100)
+  actuals <- as.logical(test$a1a2=="ok")
+  if (length(unique(predictions))==1)(next)
+  results$mmc[i] <- mcc(actuals,predictions)
+}
+
+mcc.c5.opt <- max(results$mmc)
+
+# Plot the results ------------------------------------------------------------
+ggplot(results,aes(threshold,mmc))+
+  geom_point()+geom_line()+
+  geom_vline(xintercept = 0.5,size=2,alpha=0.2,col="blue")+
+  geom_hline(yintercept = mcc.c5,size=2,alpha=0.2,col="blue")+
+  labs(title="Performance",
+       x="Threshold",
+       y="Matthews correlation coefficient")
+
+```
+
+### Naive Bayes
+
+```{r}
+
+# Train the model -------------------------------------------------------------
+model.nb <- naive_bayes(x = as.matrix(select(train,-a1a2)), y = train$a1a2, usekernel = T)
+
+# Calculate Matthews correlation coefficient ----------------------------------
+mcc.nb <- mcc(test$a1a2=="ok",predict(model.nb,newdata=test,type="class")=="ok")
+
+# Test different thresholds to improve the MMC metric -------------------------
+results <- data.table(threshold=numeric(100),mmc=numeric(100))
+for (i in 1:100){
+  results$threshold[i] <- i /100
+  predictions <- predict(model.nb,newdata=test,type="prob")[,1]>(i /100)
+  actuals <- as.logical(test$a1a2=="ok")
+  if (length(unique(predictions))==1)(next)
+  results$mmc[i] <- mcc(actuals,predictions)
+}
+
+mcc.nb.opt <- max(results$mmc)
+
+# Plot the results ------------------------------------------------------------
+ggplot(results,aes(threshold,mmc))+
+  geom_point()+geom_line()+
+  geom_vline(xintercept = 0.5,size=2,alpha=0.2,col="blue")+
+  geom_hline(yintercept = mcc.c5,size=2,alpha=0.2,col="blue")+
+  labs(title="Performance",
+       x="Threshold",
+       y="Matthews correlation coefficient")
+
+```
+
+### Logistic Regression (using glmnet)
+
+```{r}
+
+# Train the model -------------------------------------------------------------
+model.glmnet <- cv.glmnet(x = data.matrix(select(train,-a1a2)), y = train$a1a2, family = "binomial", type.measure = "auc",nfolds=5)
+
+# Calculate Matthews correlation coefficient ----------------------------------
+mcc.glmnet <- mcc(test$a1a2=="ok",predict(model.glmnet,
+                                          newx=data.matrix(select(test,-a1a2)),
+                                          type="class",
+                                          s = "lambda.1se")=="ok")
+
+# Test different thresholds to improve the MMC metric -------------------------
+results <- data.table(threshold=numeric(100),mmc=numeric(100))
+for (i in 1:100){
+  results$threshold[i] <- i /100
+  predictions <- predict(model.glmnet,
+                         newx=data.matrix(select(test,-a1a2)),
+                         type="response",
+                         s="lambda.1se")<(i /100)
+  actuals <- as.logical(test$a1a2=="ok")
+  if (length(unique(predictions))==1)(next)
+  results$mmc[i] <- mcc(actuals,predictions)
+}
+
+mcc.glmnet.opt <- max(results$mmc)
+
+# Plot the results ------------------------------------------------------------
+ggplot(results,aes(threshold,mmc))+
+  geom_point()+geom_line()+
+  geom_vline(xintercept = 0.5,size=2,alpha=0.2,col="blue")+
+  geom_hline(yintercept = mcc.c5,size=2,alpha=0.2,col="blue")+
+  labs(title="Performance",
+       x="Threshold",
+       y="Matthews correlation coefficient")
+
+```
+
+
+### Support Vector Machine
+
+```{r}
+
+
+# Try out different values for the cost parameter -----------------------------
+
+results <- data.table(iter=numeric(20),
+                      mcc=numeric(20))
+
+for (i in 1:20){
+  model.svm = svm(a1a2 ~.-mnO2.missing,data=train,kernel="linear",type="C",cost=i,scale=F)
+  mcc.svm <- mcc(test$a1a2=="ok",predict(model.svm,newdata=test,type="class")=="ok")
+  results$iter[i] <- i
+  results$mcc[i] <- mcc.svm
+}
+
+# Plot the results of tuning the cost parameter -------------------------------
+ggplot(results,aes(iter,mcc))+
+  geom_point()+geom_smooth(method='loess')
+
+# Get max cost parameter ------------------------------------------------------
+mcc.svm <- results[which.max(mcc)]$mcc
+best.cost <- results[which.max(mcc)]$iter
+
+# Test different thresholds to improve the MMC metric -------------------------
+
+model.svm <- svm(a1a2 ~.-mnO2.missing,data=train,kernel="linear",type="C",cost=best.cost,scale=F,probability=T)
+
+results <- data.table(threshold=numeric(100),mmc=numeric(100))
+for (i in 1:100){
+  results$threshold[i] <- i /100
+  predictions <- predict(model.svm,
+                         newdata=test,
+                         probability=T) >(i/100)
+  actuals <- as.logical(test$a1a2=="ok")
+  if (length(unique(predictions))==1)(next)
+  results$mmc[i] <- mcc(actuals,predictions)
+}
+
+mcc.svm.opt <- max(results$mmc)
+
+# Plot the results ------------------------------------------------------------
+ggplot(results,aes(threshold,mmc))+
+  geom_point()+geom_line()+
+  geom_vline(xintercept = 0.5,size=2,alpha=0.2,col="blue")+
+  geom_hline(yintercept = mcc.c5,size=2,alpha=0.2,col="blue")+
+  labs(title="Performance",
+       x="Threshold",
+       y="Matthews correlation coefficient")
+
+
+
+
+
+
+         
+
+```
+

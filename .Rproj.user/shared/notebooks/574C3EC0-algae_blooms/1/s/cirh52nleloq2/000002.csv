@@ -1,0 +1,6 @@
+"0","# Remove a1 and a2 to prevent leakage"
+"0","df.cluster <- df.complete %>%"
+"0","  select(-a1,-a2) %>%"
+"0","  scale(center=T,scale=T) %>%"
+"0","  data.table()"
+"0","  "

@@ -1,0 +1,4 @@
+"0","set.seed(123)"
+"0","wss <- (nrow(df.cluster)-1)*sum(apply(df.cluster,2,var))"
+"0","for (i in 2:15) wss[i] <- sum(kmeans(df.cluster,centers=i)$withinss)"
+"0","plot(1:15, wss, type=""b"", xlab=""Number of Clusters"",  ylab=""Within groups sum of squares"")"

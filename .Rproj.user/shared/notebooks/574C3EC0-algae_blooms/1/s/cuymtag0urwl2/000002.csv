@@ -1,0 +1,8 @@
+"0","missing.data <- data.table(Chla.missing=is.na(df$Chla),"
+"0","                           Cl.missing=is.na(df$Cl),"
+"0","                           PO4.missing=is.na(df$PO4),"
+"0","                           mxPH.missing=is.na(df$mxPH),"
+"0","                           mnO2.missing=is.na(df$mnO2),"
+"0","                           NO3.missing=is.na(df$NO3),"
+"0","                           NH4.missing=is.na(df$NH4),"
+"0","                           oPO4.missing=is.na(df$oPO4))"

@@ -1,0 +1,7 @@
+"0","g1 <- ggplot(df,aes(season))+"
+"0","  geom_bar(stat=""count"",fill=""blue"",alpha=.3,col=""red"")"
+"0","g2 <- ggplot(df,aes(size))+"
+"0","  geom_bar(stat=""count"",fill=""blue"",alpha=.3,col=""red"")"
+"0","g3 <- ggplot(df,aes(speed))+"
+"0","  geom_bar(stat=""count"",fill=""blue"",alpha=.3,col=""red"")"
+"0","multiplot(g1,g2,g3,cols=3)"

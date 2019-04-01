@@ -1,0 +1,8 @@
+"0","# Conclusion: We'll go with a 7 cluster kmeans"
+"0","fit <- kmeans(df.cluster, 7)"
+"0","df.data <- data.table(df.complete,kmeans=fit$cluster) %>%"
+"0","  mutate(value=1) %>%"
+"0","  mutate(kmeans=paste(""kmeans"",kmeans,sep='')) %>%"
+"0","  spread(kmeans,value,fill=0) %>%"
+"0","  data.table()"
+"0","rm(i,wss,fit)"
